@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("ioRecord")]
 [assembly: AssemblyDescription("A bidirectional audio recorder")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("Gaspard Petit")]
 [assembly: AssemblyProduct("ioRecord")]
 [assembly: AssemblyCopyright("Copyright © Gaspard Petit 2024")]
 [assembly: AssemblyTrademark("")]

@@ -6,8 +6,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{F34EEE31-C866-4E6F-945A-2AE0F521D89B}</ProjectGuid>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>Record</RootNamespace>
-    <AssemblyName>Record</AssemblyName>
+    <RootNamespace>ioRecord</RootNamespace>
+    <AssemblyName>ioRecord</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -115,6 +115,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
