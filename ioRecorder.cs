@@ -1,350 +1,343 @@
 ﻿using NAudio.CoreAudioApi;
+using NAudio.Lame;
 using NAudio.Wave;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
-using System.Timers;
 using System.Windows.Forms;
+using System.IO;
+using System.Runtime.Remoting.Channels;
 
-namespace Record
+namespace ioRecord
 {
-	public partial class ioRecorder : Form
-	{
-		private List<MMDevice> inputDevices;
-		private List<MMDevice> loopbackDevices;
-		private bool isRecording;
-		private Thread inputRecordingThread;
-		private Thread loopbackRecordingThread;
-		WasapiLoopbackCapture loopbackWaveProvider;
-		private DateTime startTime;
-		private double inputLevel = 0;
-		private double loopbackLevel = 0;
+    public class ioRecorder
+    {
+        public bool IsRecording { get; private set; }
+        public List<MMDevice> InputDevices { get; private set; }
+        public List<MMDevice> LoopbackDevices { get; private set; }
+        public DateTime _startTime { get; private set; }
+        public double InputLevel { get; private set; }
 
-		int inputIndex = 0;
-		int loopbackIndex = 0;
+        private Thread _inputRecordingThread;
+        private Thread _loopbackRecordingThread;
+        private WasapiLoopbackCapture _loopbackWaveProvider;
+        public double LoopbackLevel { get; private set; }
+        private int _inputIndex = 0;
+        private WaveFormat _waveFormat;
+        private string _outputFilePath;
+        private bool _encodeToMP3 = false;
+        public TimeSpan ElapsedTime => DateTime.Now - _startTime;
 
-		WaveFormat waveFormat;
-		string outputFilePath;
+        public ioRecorder()
+        {
+            IsRecording = false;
+            _inputRecordingThread = null;
+            _loopbackRecordingThread = null;
+            _waveFormat = new WaveFormat(44100, 16, 2);
+        }
 
+        public void LoadDevices()
+        {
+            InputDevices = GetAudioDevices(DataFlow.Capture);
+            LoopbackDevices = GetAudioDevices(DataFlow.Render);
+        }
 
-		public ioRecorder()
-		{
-			InitializeComponent();
-			isRecording = false;
-			inputRecordingThread = null;
-			loopbackRecordingThread = null;
-			waveFormat = new WaveFormat(44100, 16, 2);
-			browseLocationTextBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Sound Recordings");
+        private static List<MMDevice> GetAudioDevices(DataFlow dataFlow)
+        {
+            var devices = new List<MMDevice>();
+            var enumerator = new MMDeviceEnumerator();
+            devices.Add(enumerator.GetDefaultAudioEndpoint(dataFlow, Role.Communications));
 
-			elapsedText.Text = "";
-			loopbackBar.Visible = false;
-			inputBar.Visible = false;
-		}
+            foreach (var device in enumerator.EnumerateAudioEndPoints(dataFlow, DeviceState.Active))
+            {
+                if (device != devices[0])
+                    devices.Add(device);
+            }
+            return devices;
+        }
+        private void InputRecordingThread()
+        {
+            WaveInEvent inputWaveProvider = new WaveInEvent {
+                DeviceNumber = _inputIndex,
+                WaveFormat = _waveFormat,
+                BufferMilliseconds = 50
+            };
 
-		private void AudioRecorder_Load(object sender, EventArgs e)
-		{
-			inputDevices = GetAudioDevices(DataFlow.Capture);
-			loopbackDevices = GetAudioDevices(DataFlow.Render);
+            using (WaveFileWriter waveFileWriter = new WaveFileWriter(_outputFilePath + ".input.wav", _waveFormat)) {
+                EventHandler<WaveInEventArgs> recordHandler = (object s, WaveInEventArgs args) => {
+                    waveFileWriter.Write(args.Buffer, 0, args.BytesRecorded);
+                    InputLevel = GetSoundLevel(args.Buffer, args.BytesRecorded, waveFileWriter.WaveFormat.BitsPerSample);
+                };
+                inputWaveProvider.DataAvailable += recordHandler;
 
-			foreach (var device in inputDevices)
-			{
-				inputComboBox.Items.Add(device.FriendlyName);
-			}
+                inputWaveProvider.StartRecording();
 
-			foreach (var device in loopbackDevices)
-			{
-				loopbackComboBox.Items.Add(device.FriendlyName);
-			}
+                while (IsRecording)
+                {
+                    Thread.Sleep(100);
+                }
 
-			if (inputDevices.Count > 0)
-				inputComboBox.SelectedIndex = 0;
-
-			if (loopbackDevices.Count > 0)
-				loopbackComboBox.SelectedIndex = 0;
-		}
-
-		private List<MMDevice> GetAudioDevices(DataFlow dataFlow)
-		{
-			var devices = new List<MMDevice>();
-			var enumerator = new MMDeviceEnumerator();
-			devices.Add(enumerator.GetDefaultAudioEndpoint(dataFlow, Role.Communications));
-
-			foreach (var device in enumerator.EnumerateAudioEndPoints(dataFlow, DeviceState.Active))
-			{
-				if (device != devices[0])
-					devices.Add(device);
-			}
-			return devices;
-		}
-
-		private void Timer1_Tick(object sender, EventArgs e)
-		{
-			TimeSpan elapsedTime = DateTime.Now - startTime;
-			elapsedText.Text = elapsedTime.ToString(@"hh\:mm\:ss");
-			inputBar.Value = (int)(Math.Max(0, Math.Min(100, inputLevel * 100)));
-			loopbackBar.Value = (int)(Math.Max(0, Math.Min(100, loopbackLevel * 100)));
-		}
+                inputWaveProvider.StopRecording();
+                inputWaveProvider.DataAvailable -= recordHandler;
+                inputWaveProvider.Dispose();
+            }
+        }
 
 
-		private void record_Click(object sender, EventArgs e)
-		{
-			if (!isRecording)
-			{
-				startTime = DateTime.Now;
-				timer.Tick += Timer1_Tick;
-				timer.Enabled = true;
-				loopbackBar.Visible = true;
-				inputBar.Visible = true;
+        private static double GetSoundLevel(byte[] buffer, int bytesRecorded, int bitsPerSample)
+        {
+            double level = 0.0;
+            int bytesPerSample = bitsPerSample / 8;
+            double maxLevel = Math.Pow(2, bitsPerSample - 1);
+            switch (bitsPerSample)
+            {
+                case 8:
+                    for (int i = 0; i < bytesRecorded / bytesPerSample; ++i)
+                        level = Math.Max(level, Math.Abs((double)buffer[i] / maxLevel));
+                    break;
+                case 16:
+                    for (int i = 0; i < bytesRecorded / bytesPerSample; ++i)
+                        level = Math.Max(level, Math.Abs((double)BitConverter.ToInt16(buffer, i * bytesPerSample)) / maxLevel);
+                    break;
+                case 32:
+                    for (int i = 0; i < bytesRecorded / bytesPerSample; ++i)
+                        level = Math.Max(level, Math.Abs((double)BitConverter.ToInt32(buffer, i * bytesPerSample)) / maxLevel);
+                    break;
+            }
+            return level;
+        }
 
+        internal void LoopbackRecordingThread()
+        {
+            using (var waveFileWriter = new WaveFileWriter(_outputFilePath + ".loopback.wav", _waveFormat)) {
+                EventHandler<WaveInEventArgs> recordHandler = (object s, WaveInEventArgs args) => {
+                    waveFileWriter.Write(args.Buffer, 0, args.BytesRecorded);
+                    LoopbackLevel = GetSoundLevel(args.Buffer, args.BytesRecorded, waveFileWriter.WaveFormat.BitsPerSample);
+                };
 
-				outputFilePath = browseLocationTextBox.Text + "\\" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                _loopbackWaveProvider.DataAvailable += recordHandler;
+                _loopbackWaveProvider.StartRecording();
 
+                while (IsRecording)
+                {
+                    Thread.Sleep(100);
+                }
 
-				// Start recording
-				isRecording = true;
-				record_button.Text = "Stop";
+                _loopbackWaveProvider.StopRecording();
+                _loopbackWaveProvider.DataAvailable -= recordHandler;
+                _loopbackWaveProvider.Dispose();
+            }
+        }
+        public void StartRecording(string outputFilePath, int inputIndex, int loopbackIndex, bool encodeToMP3)
+        {
+            _outputFilePath = outputFilePath;
+            _inputIndex = inputIndex;
+            _startTime = DateTime.Now;
+            _encodeToMP3 = encodeToMP3;
 
-				// Start input device recording thread
-				inputIndex = inputComboBox.SelectedIndex;
-				inputRecordingThread = new Thread(InputRecordingThread);
-				inputRecordingThread.Start();
+            MMDevice loopbackDevice = LoopbackDevices[loopbackIndex];
+            _loopbackWaveProvider = new WasapiLoopbackCapture(loopbackDevice) {
+                WaveFormat = _waveFormat
+            };
 
-				// Start loopback device recording thread
-				loopbackIndex = loopbackComboBox.SelectedIndex;
-				MMDevice loopbackDevice = loopbackDevices[loopbackIndex];
-				loopbackWaveProvider = new WasapiLoopbackCapture(loopbackDevice)
-				{
-					WaveFormat = waveFormat
-				};
+            // Start recording
+            IsRecording = true;
 
-				loopbackRecordingThread = new Thread(LoopbackRecordingThread);
-				loopbackRecordingThread.Start();
-			}
-			else
-			{
+            // Start input device recording thread
+            _inputRecordingThread = new Thread(InputRecordingThread);
+            _inputRecordingThread.Start();
 
-				timer.Tick -= Timer1_Tick;
-				timer.Enabled = false;
-				elapsedText.Text = "";
-				loopbackBar.Visible = false;
-				inputBar.Visible = false;
+            // Start loopback device recording thread
+            _loopbackRecordingThread = new Thread(LoopbackRecordingThread);
+            _loopbackRecordingThread.Start();
+        }
 
+        public void StopRecording()
+        {
+            // Stop recording
+            IsRecording = false;
+            _loopbackRecordingThread.Join();
+            _inputRecordingThread.Join();
 
-				// Stop recording
-				isRecording = false;
-				record_button.Text = "Record";
-				loopbackRecordingThread.Join();
-				inputRecordingThread.Join();
+            // Mix input and loopback recordings and optionally encode to MP3
+            MixAudioFiles(
+                _outputFilePath + ".input.wav", 
+                _outputFilePath + ".loopback.wav", 
+                _outputFilePath + (_encodeToMP3 ? ".mp3" : ".wav"));
+        }
+        
+        private static void MixToMP3(string outputFileName, WaveFormat format, IWaveProvider inputResampler, IWaveProvider loopbackResampler)
+        {
+            int bitsPerSample = format.BitsPerSample;
+            int bytesPerSample = bitsPerSample / 8;
+            int channels = format.Channels;
 
-				// Mix input and loopback recordings
-				MixAudioFiles(outputFilePath + ".input.wav", outputFilePath + ".loopback.wav", outputFilePath + ".wav");
-			}
-		}
+            // Create MP3 file
+            using (var mixedWriter = new LameMP3FileWriter(outputFileName, format, LAMEPreset.VBR_90))
+            {
+                // Read and mix audio data sample by sample
+                byte[] inputBuffer = new byte[channels * bytesPerSample];
+                byte[] loopbackBuffer = new byte[channels * bytesPerSample];
+                while (inputResampler.Read(inputBuffer, 0, inputBuffer.Length) > 0 &&
+                       loopbackResampler.Read(loopbackBuffer, 0, loopbackBuffer.Length) > 0)
+                {
+                    double inputSample = 0;
+                    double loopbackSample = 0;
+                    for (int i = 0; i < channels; ++i)
+                    {
+                        switch (bitsPerSample)
+                        {
+                            case 8:
+                                inputSample += inputBuffer[i * bytesPerSample];
+                                loopbackSample += loopbackBuffer[i * bytesPerSample];
+                                break;
+                            case 16:
+                                inputSample += BitConverter.ToInt16(inputBuffer, i * bytesPerSample);
+                                loopbackSample += BitConverter.ToInt16(loopbackBuffer, i * bytesPerSample);
+                                break;
+                            case 32:
+                                inputSample += BitConverter.ToInt32(inputBuffer, i * bytesPerSample);
+                                loopbackSample += BitConverter.ToInt32(loopbackBuffer, i * bytesPerSample);
+                                break;
+                        }
+                    }
 
-		private void MixAudioFiles(string inputFileName, string loopbackFileName, string outputFileName)
-		{
-			try
-			{
-				// Open input and loopback WAV files
-				using (var inputReader = new WaveFileReader(inputFileName))
-				using (var loopbackReader = new WaveFileReader(loopbackFileName))
-				{
-					int sampleRate = inputReader.WaveFormat.SampleRate;
-					int bitsPerSample = inputReader.WaveFormat.BitsPerSample;
-					int channels = inputReader.WaveFormat.Channels;
-					// Ensure both files have the same sample rate, bit depth, and number of channels
-					if (sampleRate != loopbackReader.WaveFormat.SampleRate ||
-						bitsPerSample != loopbackReader.WaveFormat.BitsPerSample ||
-						channels != loopbackReader.WaveFormat.Channels)
-					{
-						MessageBox.Show("Input and loopback files must have the same sample rate, bit depth, and number of channels.");
-						return;
-					}
+                    inputSample /= channels;
+                    loopbackSample /= channels;
 
-					// Create mixed WAV file
-					WaveFormat outputFormat = new WaveFormat(sampleRate, bitsPerSample, 2);
-					using (var mixedWriter = new WaveFileWriter(outputFileName, outputFormat))
-					{
-						int bytesPerSample = channels * bitsPerSample / 8;
+                    // Convert mixed samples back to bytes
+                    byte[] mixedBuffer = new byte[2 * bytesPerSample];
+                    switch (bitsPerSample)
+                    {
+                        case 8:
+                            Buffer.BlockCopy(BitConverter.GetBytes((byte)inputSample), 0, mixedBuffer, 0, bytesPerSample);
+                            Buffer.BlockCopy(BitConverter.GetBytes((byte)loopbackSample), 0, mixedBuffer, bytesPerSample, bytesPerSample);
+                            break;
+                        case 16:
+                            Buffer.BlockCopy(BitConverter.GetBytes((short)inputSample), 0, mixedBuffer, 0, bytesPerSample);
+                            Buffer.BlockCopy(BitConverter.GetBytes((short)loopbackSample), 0, mixedBuffer, bytesPerSample, bytesPerSample);
+                            break;
+                        case 32:
+                            Buffer.BlockCopy(BitConverter.GetBytes((int)inputSample), 0, mixedBuffer, 0, bytesPerSample);
+                            Buffer.BlockCopy(BitConverter.GetBytes((int)loopbackSample), 0, mixedBuffer, bytesPerSample, bytesPerSample);
+                            break;
+                    }
 
-						// Read and mix audio data sample by sample
-						while (inputReader.Position < inputReader.Length && loopbackReader.Position < loopbackReader.Length)
-						{
-							// Read input and loopback samples
-							byte[] inputBuffer = new byte[bytesPerSample];
-							byte[] loopbackBuffer = new byte[bytesPerSample];
-							inputReader.Read(inputBuffer, 0, bytesPerSample);
-							loopbackReader.Read(loopbackBuffer, 0, bytesPerSample);
+                    // Write mixed samples to output file
+                    mixedWriter.Write(mixedBuffer, 0, mixedBuffer.Length);
+                }
+            }
+        }
 
-							double inputSample = 0;
-							double loopbackSample = 0;
-							for (int i = 0; i < channels; ++i)
-							{
-								switch (bitsPerSample)
-								{
-									case 8:
-										inputSample += inputBuffer[i * bitsPerSample / 8];
-										loopbackSample += loopbackBuffer[i * bitsPerSample / 8];
-										break;
-									case 16:
-										inputSample += BitConverter.ToInt16(inputBuffer, i * bitsPerSample / 8);
-										loopbackSample += BitConverter.ToInt16(loopbackBuffer, i * bitsPerSample / 8);
-										break;
-									case 32:
-										inputSample += BitConverter.ToInt32(inputBuffer, i * bitsPerSample / 8);
-										loopbackSample += BitConverter.ToInt32(loopbackBuffer, i * bitsPerSample / 8);
-										break;
-								}
-							}
+        private static void MixToWav(string outputFileName, WaveFormat format, IWaveProvider inputResampler, IWaveProvider loopbackResampler)
+        {
+            int bitsPerSample = format.BitsPerSample;
+            int bytesPerSample = bitsPerSample / 8;
+            int channels = format.Channels;
 
-							inputSample /= channels;
-							loopbackSample /= channels;
+            WaveFormat outputFormat = new WaveFormat(format.SampleRate, bitsPerSample, channels);
+            using (var mixedWriter = new WaveFileWriter(outputFileName, outputFormat))
+            {
+                // Read and mix audio data sample by sample
+                byte[] inputBuffer = new byte[channels * bytesPerSample];
+                byte[] loopbackBuffer = new byte[channels * bytesPerSample];
+                while (inputResampler.Read(inputBuffer, 0, inputBuffer.Length) > 0 &&
+                       loopbackResampler.Read(loopbackBuffer, 0, loopbackBuffer.Length) > 0)
+                {
+                    double inputSample = 0;
+                    double loopbackSample = 0;
+                    for (int i = 0; i < channels; ++i)
+                    {
+                        switch (bitsPerSample)
+                        {
+                            case 8:
+                                inputSample += inputBuffer[i * bytesPerSample];
+                                loopbackSample += loopbackBuffer[i * bytesPerSample];
+                                break;
+                            case 16:
+                                inputSample += BitConverter.ToInt16(inputBuffer, i * bytesPerSample);
+                                loopbackSample += BitConverter.ToInt16(loopbackBuffer, i * bytesPerSample);
+                                break;
+                            case 32:
+                                inputSample += BitConverter.ToInt32(inputBuffer, i * bytesPerSample);
+                                loopbackSample += BitConverter.ToInt32(loopbackBuffer, i * bytesPerSample);
+                                break;
+                        }
+                    }
 
-							// Convert mixed samples back to bytes
-							byte[] mixedBuffer = new byte[2 * bitsPerSample / 8];
-							switch (bitsPerSample)
-							{
-								case 8:
-									Buffer.BlockCopy(BitConverter.GetBytes((byte)inputSample), 0, mixedBuffer, 0, bitsPerSample / 8);
-									Buffer.BlockCopy(BitConverter.GetBytes((byte)loopbackSample), 0, mixedBuffer, bitsPerSample / 8, bitsPerSample / 8);
-									break;
-								case 16:
-									Buffer.BlockCopy(BitConverter.GetBytes((short)inputSample), 0, mixedBuffer, 0, bitsPerSample / 8);
-									Buffer.BlockCopy(BitConverter.GetBytes((short)loopbackSample), 0, mixedBuffer, bitsPerSample / 8, bitsPerSample / 8);
-									break;
-								case 32:
-									Buffer.BlockCopy(BitConverter.GetBytes((int)inputSample), 0, mixedBuffer, 0, bitsPerSample / 8);
-									Buffer.BlockCopy(BitConverter.GetBytes((int)loopbackSample), 0, mixedBuffer, bitsPerSample / 8, bitsPerSample / 8);
-									break;
-							}
+                    inputSample /= channels;
+                    loopbackSample /= channels;
 
-							// Write mixed samples to output file
-							mixedWriter.Write(mixedBuffer, 0, mixedBuffer.Length);
-						}
-					}
-				}
-				File.Delete(inputFileName);
-				File.Delete(loopbackFileName);
-			}
-			catch (Exception ex)
-			{
-				MessageBox.Show($"Error mixing audio files: {ex.Message}");
-			}
-		}
+                    // Convert mixed samples back to bytes
+                    byte[] mixedBuffer = new byte[2 * bytesPerSample];
+                    switch (bitsPerSample)
+                    {
+                        case 8:
+                            Buffer.BlockCopy(BitConverter.GetBytes((byte)inputSample), 0, mixedBuffer, 0, bytesPerSample);
+                            Buffer.BlockCopy(BitConverter.GetBytes((byte)loopbackSample), 0, mixedBuffer, bytesPerSample, bytesPerSample);
+                            break;
+                        case 16:
+                            Buffer.BlockCopy(BitConverter.GetBytes((short)inputSample), 0, mixedBuffer, 0, bytesPerSample);
+                            Buffer.BlockCopy(BitConverter.GetBytes((short)loopbackSample), 0, mixedBuffer, bytesPerSample, bytesPerSample);
+                            break;
+                        case 32:
+                            Buffer.BlockCopy(BitConverter.GetBytes((int)inputSample), 0, mixedBuffer, 0, bytesPerSample);
+                            Buffer.BlockCopy(BitConverter.GetBytes((int)loopbackSample), 0, mixedBuffer, bytesPerSample, bytesPerSample);
+                            break;
+                    }
 
+                    // Write mixed samples to output file
+                    mixedWriter.Write(mixedBuffer, 0, mixedBuffer.Length);
+                }
+            }
+        }
 
+        private void MixAudioFiles(string inputFileName, string loopbackFileName, string outputFileName)
+        {
+            try
+            {
+                // Open input and loopback WAV files
+                using (var inputReader = new WaveFileReader(inputFileName))
+                using (var loopbackReader = new WaveFileReader(loopbackFileName))
+                {
+                    int sampleRate = 44100;
+                    int bitsPerSample = inputReader.WaveFormat.BitsPerSample;
+                    int channels = inputReader.WaveFormat.Channels;
 
-		private void InputRecordingThread()
-		{
-			var inputWaveProvider = new WaveInEvent
-			{
-				DeviceNumber = inputIndex,
-				WaveFormat = waveFormat,
-				BufferMilliseconds = 50
-			};
+                    // Ensure both files have the same bit depth and number of channels, resample if needed
+                    if (bitsPerSample != loopbackReader.WaveFormat.BitsPerSample || channels != loopbackReader.WaveFormat.Channels)
+                    {
+                        MessageBox.Show("Input and loopback files must have the same bit depth and number of channels.");
+                        return;
+                    }
 
-			using (var waveFileWriter = new WaveFileWriter(outputFilePath + ".input.wav", waveFormat))
-			{
-				inputWaveProvider.DataAvailable += (s, args) =>
-				{
-					waveFileWriter.Write(args.Buffer, 0, args.BytesRecorded);
-					switch (waveFileWriter.WaveFormat.BitsPerSample)
-					{
-						case 8:
-							inputLevel = 0;
-							for (int i = 0; i < args.Buffer.Length; ++i)
-								inputLevel = Math.Max(inputLevel, Math.Abs(i / 128.0));
-							break;
-						case 16:
-							inputLevel = 0;
-							for (int i = 0; i < args.Buffer.Length/2; ++i)
-								inputLevel = Math.Max(inputLevel, Math.Abs((double)BitConverter.ToInt16(args.Buffer, i * 2)) / 32768.0);
-							break;
-						case 32:
-							inputLevel = 0;
-							for (int i = 0; i < args.Buffer.Length / 4; ++i)
-								inputLevel = Math.Max(inputLevel, Math.Abs((double)BitConverter.ToInt32(args.Buffer, i * 4)) / 2147483648.0);
-							break;
-					}
-				};
+                    // Create resampler for input and loopback files if necessary
+                    using (var inputResampler = new MediaFoundationResampler(inputReader, new WaveFormat(sampleRate, bitsPerSample, channels)))
+                    using (var loopbackResampler = new MediaFoundationResampler(loopbackReader, new WaveFormat(sampleRate, bitsPerSample, channels)))
+                    {
+                        inputResampler.ResamplerQuality = 60;
+                        loopbackResampler.ResamplerQuality = 60;
 
-				inputWaveProvider.StartRecording();
-
-				while (isRecording)
-				{
-					Thread.Sleep(100);
-				}
-
-				inputWaveProvider.StopRecording();
-			}
-		}
-
-		private void LoopbackRecordingThread()
-		{
-			using (var waveFileWriter = new WaveFileWriter(outputFilePath + ".loopback.wav", waveFormat))
-			{
-				loopbackWaveProvider.DataAvailable += (s, args) =>
-				{
-					waveFileWriter.Write(args.Buffer, 0, args.BytesRecorded);
-					switch (waveFileWriter.WaveFormat.BitsPerSample)
-					{
-						case 8:
-							loopbackLevel = 0;
-							for (int i = 0; i < args.Buffer.Length; ++i)
-								loopbackLevel = Math.Max(loopbackLevel, Math.Abs(i / 128.0));
-							break;
-						case 16:
-							loopbackLevel = 0;
-							for (int i = 0; i < args.Buffer.Length / 2; ++i)
-								loopbackLevel = Math.Max(loopbackLevel, Math.Abs((double)BitConverter.ToInt16(args.Buffer, i * 2)) / 32768.0);
-							break;
-						case 32:
-							loopbackLevel = 0;
-							for (int i = 0; i < args.Buffer.Length / 4; ++i)
-								loopbackLevel = Math.Max(loopbackLevel, Math.Abs((double)BitConverter.ToInt32(args.Buffer, i * 4)) / 2147483648.0);
-							break;
-					}
-				};
-
-				loopbackWaveProvider.StartRecording();
-
-				while (isRecording)
-				{
-					Thread.Sleep(100);
-				}
-
-				loopbackWaveProvider.StopRecording();
-			}
-		}
-
-		private void browseButton_Click(object sender, EventArgs e)
-		{
-			using (FolderBrowserDialog openFileDialog = new FolderBrowserDialog())
-			{
-				
-				// Set initial directory to last location if available, otherwise default to current directory
-				if (!string.IsNullOrEmpty(browseLocationTextBox.Text))
-					openFileDialog.SelectedPath = browseLocationTextBox.Text;
-				else
-					openFileDialog.SelectedPath = Directory.GetCurrentDirectory();
-
-				if (openFileDialog.ShowDialog() == DialogResult.OK)
-				{
-					// Display the selected file path in the TextBox
-					browseLocationTextBox.Text = openFileDialog.SelectedPath;
-				}
-			}
-		}
-
-		private void openButton_Click(object sender, EventArgs e)
-		{
-			string path = browseLocationTextBox.Text;
-			if (!path.EndsWith("\\"))
-				path += "\\";
-			Process.Start("explorer.exe", browseLocationTextBox.Text);
-		}
-	}
+                        if (outputFileName.EndsWith(".mp3"))
+                        {
+                            WaveFormat format = new WaveFormat(sampleRate, bitsPerSample, channels);
+                            MixToMP3(outputFileName, format, inputResampler, loopbackResampler);
+                        }
+                        else
+                        {
+                            // Create mixed WAV file
+                            WaveFormat format = new WaveFormat(sampleRate, bitsPerSample, channels);
+                            MixToWav(outputFileName, format, inputResampler, loopbackResampler);
+                        }
+                    }
+                }
+                File.Delete(inputFileName);
+                File.Delete(loopbackFileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error mixing audio files: {ex.Message}");
+            }
+        }
+    }
 }
