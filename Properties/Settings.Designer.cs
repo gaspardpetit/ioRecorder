@@ -22,5 +22,61 @@ namespace ioRecord.Properties {
                 return defaultInstance;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("verbastream")]
+        public string VerbastreamPath {
+            get { return ((string)(this["VerbastreamPath"])); }
+            set { this["VerbastreamPath"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string OutputFolder { get { return (string)this["OutputFolder"]; } set { this["OutputFolder"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool SaveAudio { get { return (bool)this["SaveAudio"]; } set { this["SaveAudio"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool CompressMp3 { get { return (bool)this["CompressMp3"]; } set { this["CompressMp3"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DiagnosticLogging { get { return (bool)this["DiagnosticLogging"]; } set { this["DiagnosticLogging"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool EnableTranscript { get { return (bool)this["EnableTranscript"]; } set { this["EnableTranscript"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool EnglishLanguage { get { return (bool)this["EnglishLanguage"]; } set { this["EnglishLanguage"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool FrenchLanguage { get { return (bool)this["FrenchLanguage"]; } set { this["FrenchLanguage"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int TranscriptMode { get { return (int)this["TranscriptMode"]; } set { this["TranscriptMode"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("whisper:large-v3")]
+        public string TranscriptModel { get { return (string)this["TranscriptModel"]; } set { this["TranscriptModel"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string InputDeviceId { get { return (string)this["InputDeviceId"]; } set { this["InputDeviceId"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string RecordingOutputDeviceId { get { return (string)this["RecordingOutputDeviceId"]; } set { this["RecordingOutputDeviceId"] = value; } }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string PlaybackOutputDeviceId { get { return (string)this["PlaybackOutputDeviceId"]; } set { this["PlaybackOutputDeviceId"] = value; } }
     }
 }
