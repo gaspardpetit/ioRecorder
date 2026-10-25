@@ -13,6 +13,7 @@
 		/// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
 		protected override void Dispose(bool disposing)
 		{
+			if (disposing) StopPlayback();
 			if (disposing && (components != null))
 			{
 				components.Dispose();
@@ -29,20 +30,32 @@
 		private void InitializeComponent()
 		{
             this.components = new System.ComponentModel.Container();
-            this.inputComboBox = new System.Windows.Forms.ComboBox();
-            this.loopbackComboBox = new System.Windows.Forms.ComboBox();
-            this.record_button = new System.Windows.Forms.Button();
+            this.inputComboBox = new ioRecord.ThemedComboBox();
+            this.loopbackComboBox = new ioRecord.ThemedComboBox();
+            this.record_button = new ioRecord.ThemedButton();
             this.label1 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
-            this.browseLocationTextBox = new System.Windows.Forms.TextBox();
-            this.browseButton = new System.Windows.Forms.Button();
+            this.browseLocationTextBox = new ioRecord.ThemedTextBox();
+            this.browseButton = new ioRecord.ThemedButton();
             this.elapsedText = new System.Windows.Forms.Label();
             this.timer = new System.Windows.Forms.Timer(this.components);
-            this.inputBar = new System.Windows.Forms.ProgressBar();
-            this.loopbackBar = new System.Windows.Forms.ProgressBar();
-            this.openButton = new System.Windows.Forms.Button();
-            this.compressToMP3 = new System.Windows.Forms.CheckBox();
+            this.inputBar = new ioRecord.AudioLevelBar();
+            this.loopbackBar = new ioRecord.AudioLevelBar();
+            this.openButton = new ioRecord.ThemedButton();
+            this.compressToMP3 = new ioRecord.ThemedCheckBox();
+            this.openAudioButton = new ioRecord.ThemedButton();
+            this.playAudioButton = new ioRecord.ThemedButton();
+            this.stopAudioButton = new ioRecord.ThemedButton();
+            this.audioFileLabel = new System.Windows.Forms.Label();
+            this.transcriptGroup = new ioRecord.ThemedGroupBox();
+            this.transcriptText = new ioRecord.TranscriptHtmlView();
+            this.transcriptStatus = new System.Windows.Forms.Label();
+            this.enableTranscript = new ioRecord.ThemedCheckBox();
+            this.transcriberPathLabel = new System.Windows.Forms.Label();
+            this.transcriberPath = new ioRecord.ThemedTextBox();
+            this.browseTranscriber = new ioRecord.ThemedButton();
+            this.transcriptGroup.SuspendLayout();
             this.SuspendLayout();
             // 
             // inputComboBox
@@ -130,7 +143,6 @@
             this.inputBar.Location = new System.Drawing.Point(111, 92);
             this.inputBar.Name = "inputBar";
             this.inputBar.Size = new System.Drawing.Size(223, 23);
-            this.inputBar.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
             this.inputBar.TabIndex = 11;
             // 
             // loopbackBar
@@ -138,7 +150,6 @@
             this.loopbackBar.Location = new System.Drawing.Point(111, 121);
             this.loopbackBar.Name = "loopbackBar";
             this.loopbackBar.Size = new System.Drawing.Size(223, 23);
-            this.loopbackBar.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
             this.loopbackBar.TabIndex = 12;
             // 
             // openButton
@@ -162,12 +173,107 @@
             this.compressToMP3.TabIndex = 14;
             this.compressToMP3.Text = "Compress to MP3";
             this.compressToMP3.UseVisualStyleBackColor = true;
+            // openAudioButton
+            this.openAudioButton.Location = new System.Drawing.Point(24, 161);
+            this.openAudioButton.Name = "openAudioButton";
+            this.openAudioButton.Size = new System.Drawing.Size(85, 23);
+            this.openAudioButton.TabIndex = 15;
+            this.openAudioButton.Text = "Open Audio";
+            this.openAudioButton.UseVisualStyleBackColor = true;
+            this.openAudioButton.Click += new System.EventHandler(this.openAudioButton_Click);
+            // playAudioButton
+            this.playAudioButton.Enabled = false;
+            this.playAudioButton.Location = new System.Drawing.Point(115, 161);
+            this.playAudioButton.Name = "playAudioButton";
+            this.playAudioButton.Size = new System.Drawing.Size(75, 23);
+            this.playAudioButton.TabIndex = 16;
+            this.playAudioButton.Text = "Play";
+            this.playAudioButton.UseVisualStyleBackColor = true;
+            this.playAudioButton.Click += new System.EventHandler(this.playAudioButton_Click);
+            // stopAudioButton
+            this.stopAudioButton.Enabled = false;
+            this.stopAudioButton.Location = new System.Drawing.Point(196, 161);
+            this.stopAudioButton.Name = "stopAudioButton";
+            this.stopAudioButton.Size = new System.Drawing.Size(75, 23);
+            this.stopAudioButton.TabIndex = 17;
+            this.stopAudioButton.Text = "Stop";
+            this.stopAudioButton.UseVisualStyleBackColor = true;
+            this.stopAudioButton.Click += new System.EventHandler(this.stopAudioButton_Click);
+            // audioFileLabel
+            this.audioFileLabel.AutoEllipsis = true;
+            this.audioFileLabel.Location = new System.Drawing.Point(277, 166);
+            this.audioFileLabel.Name = "audioFileLabel";
+            this.audioFileLabel.Size = new System.Drawing.Size(252, 16);
+            this.audioFileLabel.TabIndex = 18;
+            this.audioFileLabel.Text = "No audio file selected";
+            // transcriptGroup
+            this.transcriptGroup.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+            | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
+            this.transcriptGroup.Controls.Add(this.transcriptText);
+            this.transcriptGroup.Controls.Add(this.transcriptStatus);
+            this.transcriptGroup.Location = new System.Drawing.Point(24, 235);
+            this.transcriptGroup.Name = "transcriptGroup";
+            this.transcriptGroup.Size = new System.Drawing.Size(712, 300);
+            this.transcriptGroup.TabIndex = 19;
+            this.transcriptGroup.TabStop = false;
+            this.transcriptGroup.Text = "Transcript";
+            // transcriptText
+            this.transcriptText.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+            | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
+            this.transcriptText.BackColor = System.Drawing.SystemColors.Window;
+            this.transcriptText.Location = new System.Drawing.Point(12, 42);
+            this.transcriptText.Name = "transcriptText";
+            this.transcriptText.Size = new System.Drawing.Size(688, 246);
+            this.transcriptText.TabIndex = 1;
+            // transcriptStatus
+            this.transcriptStatus.AutoEllipsis = true;
+            this.transcriptStatus.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.transcriptStatus.Location = new System.Drawing.Point(12, 21);
+            this.transcriptStatus.Name = "transcriptStatus";
+            this.transcriptStatus.Size = new System.Drawing.Size(688, 16);
+            this.transcriptStatus.TabIndex = 0;
+            this.transcriptStatus.Text = "Transcript is off.";
+            this.enableTranscript.AutoSize = true;
+            this.enableTranscript.Location = new System.Drawing.Point(24, 164);
+            this.enableTranscript.Name = "enableTranscript";
+            this.enableTranscript.Size = new System.Drawing.Size(116, 17);
+            this.enableTranscript.TabIndex = 20;
+            this.enableTranscript.Text = "Enable transcript";
+            this.enableTranscript.UseVisualStyleBackColor = true;
+            this.enableTranscript.CheckedChanged += new System.EventHandler(this.enableTranscript_CheckedChanged);
+            this.transcriberPathLabel.AutoSize = true;
+            this.transcriberPathLabel.Location = new System.Drawing.Point(151, 202);
+            this.transcriberPathLabel.Name = "transcriberPathLabel";
+            this.transcriberPathLabel.Size = new System.Drawing.Size(79, 13);
+            this.transcriberPathLabel.TabIndex = 21;
+            this.transcriberPathLabel.Text = "verbastream:";
+            this.transcriberPath.Location = new System.Drawing.Point(235, 198);
+            this.transcriberPath.Name = "transcriberPath";
+            this.transcriberPath.Size = new System.Drawing.Size(419, 20);
+            this.transcriberPath.TabIndex = 22;
+            this.browseTranscriber.Location = new System.Drawing.Point(660, 197);
+            this.browseTranscriber.Name = "browseTranscriber";
+            this.browseTranscriber.Size = new System.Drawing.Size(76, 23);
+            this.browseTranscriber.TabIndex = 23;
+            this.browseTranscriber.Text = "Browse";
+            this.browseTranscriber.UseVisualStyleBackColor = true;
+            this.browseTranscriber.Click += new System.EventHandler(this.browseTranscriber_Click);
             // 
             // ioRecorder
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(555, 149);
+            this.ClientSize = new System.Drawing.Size(760, 558);
+            this.Controls.Add(this.browseTranscriber);
+            this.Controls.Add(this.transcriberPath);
+            this.Controls.Add(this.transcriberPathLabel);
+            this.Controls.Add(this.enableTranscript);
+            this.Controls.Add(this.transcriptGroup);
+            this.Controls.Add(this.audioFileLabel);
+            this.Controls.Add(this.stopAudioButton);
+            this.Controls.Add(this.playAudioButton);
+            this.Controls.Add(this.openAudioButton);
             this.Controls.Add(this.compressToMP3);
             this.Controls.Add(this.openButton);
             this.Controls.Add(this.loopbackBar);
@@ -181,11 +287,12 @@
             this.Controls.Add(this.record_button);
             this.Controls.Add(this.loopbackComboBox);
             this.Controls.Add(this.inputComboBox);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
+            this.MinimumSize = new System.Drawing.Size(776, 400);
             this.Name = "ioRecorder";
             this.Text = "ioRecorder";
             this.Load += new System.EventHandler(this.AudioRecorder_Load);
+            this.transcriptGroup.ResumeLayout(false);
+            this.transcriptGroup.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -193,19 +300,30 @@
 
 		#endregion
 
-		private System.Windows.Forms.ComboBox inputComboBox;
-		private System.Windows.Forms.ComboBox loopbackComboBox;
+		private ioRecord.ThemedComboBox inputComboBox;
+		private ioRecord.ThemedComboBox loopbackComboBox;
 		private System.Windows.Forms.Button record_button;
 		private System.Windows.Forms.Label label1;
 		private System.Windows.Forms.Label label2;
 		private System.Windows.Forms.Label label3;
-		private System.Windows.Forms.TextBox browseLocationTextBox;
+		private ioRecord.ThemedTextBox browseLocationTextBox;
 		private System.Windows.Forms.Button browseButton;
 		private System.Windows.Forms.Label elapsedText;
 		private System.Windows.Forms.Timer timer;
-		private System.Windows.Forms.ProgressBar inputBar;
-		private System.Windows.Forms.ProgressBar loopbackBar;
+		private ioRecord.AudioLevelBar inputBar;
+		private ioRecord.AudioLevelBar loopbackBar;
 		private System.Windows.Forms.Button openButton;
         private System.Windows.Forms.CheckBox compressToMP3;
+        private System.Windows.Forms.Button openAudioButton;
+        private System.Windows.Forms.Button playAudioButton;
+        private System.Windows.Forms.Button stopAudioButton;
+        private System.Windows.Forms.Label audioFileLabel;
+        private ioRecord.ThemedGroupBox transcriptGroup;
+        private ioRecord.TranscriptHtmlView transcriptText;
+        private System.Windows.Forms.Label transcriptStatus;
+        private System.Windows.Forms.CheckBox enableTranscript;
+        private System.Windows.Forms.Label transcriberPathLabel;
+        private ioRecord.ThemedTextBox transcriberPath;
+        private System.Windows.Forms.Button browseTranscriber;
     }
 }

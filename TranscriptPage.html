@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { color-scheme: light; font: 14px/1.38 'Segoe UI', sans-serif;
+    scrollbar-color: #aeb5be #f2f3f5; scrollbar-width: thin; }
+  :root.dark { color-scheme: dark; scrollbar-color: #646b75 #24272c; }
+  body { margin: 0; background: #fff; color: #23272c; }
+  body.dark { color-scheme: dark; background: #181a1e; color: #e8ebf0; }
+  #content { padding: 8px 12px 12px; }
+  .timestamp { text-align: center; color: #68707a; font: 700 11px 'Segoe UI', sans-serif;
+    margin: 12px 0 10px; user-select: text; }
+  .dark .timestamp { color: #a6aeb9; }
+  .block { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px;
+    border-radius: 8px; margin: 0 0 11px; padding: 6px 10px; align-items: start; }
+  .badge { border-radius: 12px; color: #fff; padding: 4px 11px;
+    font: 700 11px/1.2 'Segoe UI', sans-serif; white-space: nowrap; user-select: text; }
+  .lines { min-width: 0; padding-top: 1px; }
+  .line { margin: 0; padding: 2px 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+  .line.tentative { opacity: .68; font-style: italic; }
+  .status { display: table; max-width: calc(100% - 20px); margin: 8px 10px 12px;
+    padding: 5px 13px; border-radius: 14px; background: #e2ecf6; color: #314d6a;
+    font: 700 11px/1.4 'Segoe UI', sans-serif; }
+  .status[hidden] { display: none; }
+  .dark .status { background: #354658; color: #cbdcf1; }
+  ::-webkit-scrollbar { width: 11px; }
+  ::-webkit-scrollbar-track { background: #f2f3f5; }
+  ::-webkit-scrollbar-thumb { background: #aeb5be; border: 2px solid #f2f3f5; border-radius: 8px; }
+  html.dark::-webkit-scrollbar-track { background: #24272c; }
+  html.dark::-webkit-scrollbar-thumb { background: #646b75; border-color: #24272c; }
+  ::selection { background: #83b7ea; color: #102030; }
+</style>
+</head>
+<body>
+<main id="content"></main>
+<div id="status" class="status" hidden></div>
+<script>
+(() => {
+  const content = document.getElementById('content');
+  const statusNode = document.getElementById('status');
+  let snapshot = null;
+  let pending = false;
+  const accents = [[29,107,127],[116,72,151],[166,83,47],[47,120,86],[156,65,111],[64,92,165]];
+
+  function speakerColor(name) {
+    let hash = 0;
+    for (const char of name) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) & 0x7fffffff;
+    return accents[hash % accents.length];
+  }
+  function clock(seconds) {
+    const n = Math.max(0, Math.floor(Number(seconds) || 0));
+    return [Math.floor(n / 3600), Math.floor(n / 60) % 60, n % 60]
+      .map(x => String(x).padStart(2, '0')).join(':');
+  }
+  function entriesFromSnapshot(data) {
+    const entries = (data?.utterances || []).map(u => ({
+      start: Number(u.start) || 0, speaker: u.speaker || 'Speaker',
+      text: String(u.text || '').trimStart(), tentative: u.status !== 'confirmed'
+    }));
+    let partial = null;
+    let previousEnd = 0;
+    function finish() {
+      if (partial) entries.push(partial);
+      partial = null;
+    }
+    for (const word of data?.unconfirmed_words || []) {
+      const start = Number(word.start) || 0;
+      const speaker = word.speaker || 'Speaker';
+      if (partial && (partial.speaker !== speaker || start - previousEnd > 1.5)) finish();
+      if (!partial) partial = { start, speaker, text: '', tentative: true };
+      partial.text += String(word.text || '');
+      previousEnd = Number(word.end) || start;
+    }
+    finish();
+    entries.sort((a, b) => a.start - b.start);
+    return entries;
+  }
+  function selectedText() {
+    const selection = window.getSelection();
+    return selection && !selection.isCollapsed && selection.toString().length > 0;
+  }
+  function showStatus(text) {
+    const root = document.scrollingElement;
+    const follow = root.scrollHeight - root.clientHeight - root.scrollTop < 32;
+    statusNode.textContent = text || '';
+    statusNode.hidden = !text;
+    if (follow) root.scrollTop = root.scrollHeight;
+  }
+  function render() {
+    if (selectedText()) { pending = true; return; }
+    pending = false;
+    const root = document.scrollingElement;
+    const oldTop = root.scrollTop;
+    const follow = root.scrollHeight - root.clientHeight - oldTop < 32;
+    const fragment = document.createDocumentFragment();
+    const entries = entriesFromSnapshot(snapshot);
+    let block = null;
+    let lines = null;
+    let lastStamp = -Infinity;
+    for (const entry of entries) {
+      if (entry.start - lastStamp >= 60) {
+        const timestamp = document.createElement('div');
+        timestamp.className = 'timestamp';
+        timestamp.textContent = clock(entry.start);
+        fragment.append(timestamp);
+        lastStamp = entry.start;
+        block = null;
+      }
+      if (!block || block.dataset.speaker !== entry.speaker) {
+        const rgb = speakerColor(entry.speaker);
+        const dark = document.body.classList.contains('dark');
+        block = document.createElement('section');
+        block.className = 'block';
+        block.dataset.speaker = entry.speaker;
+        block.style.backgroundColor = `rgba(${rgb.join(',')},${dark ? .19 : .09})`;
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.style.backgroundColor = `rgb(${rgb.join(',')})`;
+        badge.textContent = entry.speaker;
+        block.append(badge);
+        lines = document.createElement('div');
+        lines.className = 'lines';
+        lines.style.color = dark
+          ? `rgb(${rgb.map(x => Math.round(x * .28 + 255 * .72)).join(',')})`
+          : `rgb(${rgb.join(',')})`;
+        block.append(lines);
+        fragment.append(block);
+      }
+      const line = document.createElement('div');
+      line.className = 'line' + (entry.tentative ? ' tentative' : '');
+      line.textContent = entry.text;
+      lines.append(line);
+    }
+    content.replaceChildren(fragment);
+    root.scrollTop = follow ? root.scrollHeight : oldTop;
+  }
+  document.addEventListener('selectionchange', () => {
+    if (pending && !selectedText()) render();
+  });
+  window.chrome.webview.addEventListener('message', event => {
+    const data = event.data;
+    if (data.type === 'snapshot') { snapshot = data; render(); }
+    else if (data.type === 'status') showStatus(data.text || '');
+    else if (data.type === 'theme') {
+      document.body.classList.toggle('dark', !!data.dark);
+      document.documentElement.classList.toggle('dark', !!data.dark);
+      render();
+    }
+    else if (data.type === 'clear') {
+      window.getSelection()?.removeAllRanges();
+      pending = false;
+      snapshot = null;
+      showStatus('');
+      render();
+    }
+  });
+})();
+</script>
+</body>
+</html>

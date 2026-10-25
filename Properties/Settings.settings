@@ -3,5 +3,21 @@
   <Profiles>
     <Profile Name="(Default)" />
   </Profiles>
-  <Settings />
+  <Settings>
+    <Setting Name="VerbastreamPath" Type="System.String" Scope="User">
+      <Value Profile="(Default)">verbastream</Value>
+    </Setting>
+    <Setting Name="OutputFolder" Type="System.String" Scope="User"><Value Profile="(Default)" /></Setting>
+    <Setting Name="SaveAudio" Type="System.Boolean" Scope="User"><Value Profile="(Default)">False</Value></Setting>
+    <Setting Name="CompressMp3" Type="System.Boolean" Scope="User"><Value Profile="(Default)">True</Value></Setting>
+    <Setting Name="DiagnosticLogging" Type="System.Boolean" Scope="User"><Value Profile="(Default)">False</Value></Setting>
+    <Setting Name="EnableTranscript" Type="System.Boolean" Scope="User"><Value Profile="(Default)">False</Value></Setting>
+    <Setting Name="EnglishLanguage" Type="System.Boolean" Scope="User"><Value Profile="(Default)">True</Value></Setting>
+    <Setting Name="FrenchLanguage" Type="System.Boolean" Scope="User"><Value Profile="(Default)">True</Value></Setting>
+    <Setting Name="TranscriptMode" Type="System.Int32" Scope="User"><Value Profile="(Default)">0</Value></Setting>
+    <Setting Name="TranscriptModel" Type="System.String" Scope="User"><Value Profile="(Default)">whisper:large-v3</Value></Setting>
+    <Setting Name="InputDeviceId" Type="System.String" Scope="User"><Value Profile="(Default)" /></Setting>
+    <Setting Name="RecordingOutputDeviceId" Type="System.String" Scope="User"><Value Profile="(Default)" /></Setting>
+    <Setting Name="PlaybackOutputDeviceId" Type="System.String" Scope="User"><Value Profile="(Default)" /></Setting>
+  </Settings>
 </SettingsFile>
